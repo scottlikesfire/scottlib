@@ -56,6 +56,34 @@ def blend_image_sequence(image_sequence1, image_sequence2):
     
     return blended_sequence
 
+def blend_images_for_frames(image1, image2, num_frames):
+    """
+    Blend two images together for a specified number of frames.
+    
+    Parameters:
+    image1 : ndarray
+        First image.
+    image2 : ndarray
+        Second image.
+    num_frames : int
+        Number of frames to blend over.
+        
+    Returns:
+    blended_sequence : list of ndarray
+        Blended image sequence.
+    """
+    blended_sequence = []
+    alpha_step = 1.0 / num_frames
+    alpha = 0.0
+    for i in range(num_frames):
+        blended_image = blend_images(image1, image2, alpha)
+        blended_sequence.append(blended_image)
+        alpha += alpha_step
+    
+    return blended_sequence
+
+
+
 
 def blend_image_directories(dir1, dir2, output_dir):
     """
