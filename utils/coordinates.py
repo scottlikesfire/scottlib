@@ -4,6 +4,39 @@
 import numpy as np
 from scipy.spatial.transform import Rotation as R # TODO get rid of scipy as a requirement
 
+def cart2polar(x, y):
+    """
+    Convert Cartesian coordinates to polar coordinates.
+    
+    Parameters:
+    x, y : float
+        Cartesian coordinates.
+        
+    Returns:
+    r, theta : float
+        Polar coordinates (radius, angle).
+    """
+    r = np.sqrt(x**2 + y**2)
+    theta = np.arctan2(y, x)
+    return r, theta
+
+def polar2cart(r, theta):
+    """
+    Convert polar coordinates to Cartesian coordinates.
+    
+    Parameters:
+    r : float
+        Radius.
+    theta : float
+        Angle.
+        
+    Returns:
+    x, y : float
+        Cartesian coordinates.
+    """
+    x = r * np.cos(theta)
+    y = r * np.sin(theta)
+    return x, y
 
 
 # convert from cartesian to spherical coordinates

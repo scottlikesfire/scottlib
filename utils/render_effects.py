@@ -5,7 +5,7 @@
 import cv2
 import numpy as np
 import os
-
+import glob
 
 def blend_images(image1, image2, alpha):
     """
@@ -102,13 +102,26 @@ def blend_image_directories(dir1, dir2, output_dir):
     """
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
-    
-    files1 = sorted(os.listdir(dir1))
-    files2 = sorted(os.listdir(dir2))
-    
-    for file1, file2 in zip(files1, files2):
-        if file1.endswith('.png') and file2.endswith('.png'):
-            img1 = cv2.imread(os.path.join(dir1, file1))
-            img2 = cv2.imread(os.path.join(dir2, file2))
-            blended_image = blend_images(img1, img2, 0.5)
-            cv2.imwrite(os.path.join(output_dir, f'blended_{file1}'), blended_image)
+    files1 = sorted(glob.glob(os.path.join(dir1, '*.png')))
+    files2 = sorted(glob.glob(os.path.join(dir2, '*.png')))
+    if len(files1) != len(files2):
+        raise ValueError("The number of images in the two directories must be the same.")
+
+    imgs1 = []
+    imgs2 = []
+    for file in files1:
+        img1 = cv2.imread(file)
+        img2 = cv2.imread(os.path.join(dir2, os.path.basename(file)))
+        if img1 is None or img2 is None:
+            print(f"Error reading image {file}. Skipping.")
+            import pdb;pdb.set_trace()
+            continue
+        imgs1.append(img1)
+        imgs2.append(img2)
+    # Blend images
+    blended = blend_image_sequence(imgs1, imgs2)
+    for i in range(len(blended)):
+        blended_image = blended[i]
+        fname = files1[i]
+        cv2.imwrite(os.path.join(output_dir, os.path.basename(fname)), blended_image)
+   
