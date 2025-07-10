@@ -147,5 +147,5 @@ def etrans2homo(euler,trans):
     rotm = euler2rotm(euler)
     t_mat = np.eye(4)
     t_mat[:3,:3] = rotm
-    t_mat[3,:3] = trans 
+    t_mat[:3,3] = trans 
     return t_mat
