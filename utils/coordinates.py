@@ -4,6 +4,61 @@
 import numpy as np
 from scipy.spatial.transform import Rotation as R # TODO get rid of scipy as a requirement
 
+# need to work this out for generic axis
+def cylindrical2cartesian(r, theta, t,axis):
+    """Convert cylindrical coordinates to Cartesian coordinates.
+    
+    Parameters:
+    r : float
+        Radius.
+    theta : float
+        Angle in radians.
+    t : float
+        Height along the axis.
+    axis : int
+        Axis of rotation (0 for x, 1 for y, 2 for z).
+        
+    Returns:
+    x, y, z : float
+        Cartesian coordinates.
+    """
+    if axis == 0:  # rotation around x-axis
+        x = r * np.cos(theta)
+        y = r * np.sin(theta)
+        z = t
+    elif axis == 1:  # rotation around y-axis
+        x = t
+        y = r * np.cos(theta)
+        z = r * np.sin(theta)
+    else:  # rotation around z-axis
+        x = r * np.cos(theta)
+        y = r * np.sin(theta)
+        z = t
+    return x, y, z
+
+def cartesian2cylindrical(x, y, z, axis):
+    """Convert Cartesian coordinates to cylindrical coordinates.
+
+    Parameters:
+    x, y, z : float
+        Cartesian coordinates.
+    axis : int
+        Axis of rotation (0 for x, 1 for y, 2 for z).
+
+    Returns:
+    r, theta, z : float
+        Cylindrical coordinates (radius, angle, height).
+    """
+    if axis == 0:  # rotation around x-axis
+        r, theta = cart2polar(y, z)
+        return r, theta, x
+    elif axis == 1:  # rotation around y-axis
+        r, theta = cart2polar(z, x)
+        return r, theta, y
+    else:  # rotation around z-axis
+        r, theta = cart2polar(x, y)
+        return r, theta, z
+
 def cart2polar(x, y):
     """
     Convert Cartesian coordinates to polar coordinates.

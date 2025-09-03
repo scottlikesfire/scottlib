@@ -20,3 +20,16 @@ def write_obj(verts, faces, filename):
             f.write(f'v {v[0]} {v[1]} {v[2]}\n')
         for face in faces:
             f.write(f'f {face[0]+1} {face[1]+1} {face[2]+1}\n')
+
+# write pointcloud to ply
+def write_to_ply(points, colors, output_file):
+    with open(output_file, "w") as f:
+        f.write("ply\n")
+        f.write("format ascii 1.0\n")
+        f.write(f"element vertex {points.shape[0]}\n")
+        f.write("property float x\nproperty float y\nproperty float z\n")
+        f.write("property uchar red\nproperty uchar green\nproperty uchar blue\n")
+        f.write("end_header\n")
+        for p, c in zip(points, colors):
+            f.write(f"{p[0]} {p[1]} {p[2]} {c[0]} {c[1]} {c[2]}\n")
+    
