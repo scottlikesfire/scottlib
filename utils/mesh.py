@@ -21,8 +21,41 @@ def write_obj(verts, faces, filename):
         for face in faces:
             f.write(f'f {face[0]+1} {face[1]+1} {face[2]+1}\n')
 
+def write_stl(verts, faces, filename):
+    """
+    Write a triangle mesh to a binary STL file.
+
+    Parameters:
+    verts : ndarray
+        Array of vertices (Nx3).
+    faces : ndarray
+        Array of faces (Mx3), each row is three vertex indices.
+    filename : str
+        Output filename.
+    """
+    import numpy as np
+    import struct
+
+    triangles = verts[faces]  # (M, 3, 3)
+    v0, v1, v2 = triangles[:, 0], triangles[:, 1], triangles[:, 2]
+    normals = np.cross(v1 - v0, v2 - v0)
+    lengths = np.linalg.norm(normals, axis=1, keepdims=True)
+    lengths[lengths == 0] = 1.0
+    normals /= lengths
+
+    with open(filename, 'wb') as f:
+        f.write(b'\0' * 80)  # header
+        f.write(struct.pack('<I', len(faces)))
+        for i in range(len(faces)):
+            f.write(struct.pack('<3f', *normals[i]))
+            f.write(struct.pack('<3f', *v0[i]))
+            f.write(struct.pack('<3f', *v1[i]))
+            f.write(struct.pack('<3f', *v2[i]))
+            f.write(struct.pack('<H', 0))  # attribute byte count
+
+
 # write pointcloud to ply
-def write_to_ply(points, colors, output_file):
+def write_ply(points, colors, output_file):
     with open(output_file, "w") as f:
         f.write("ply\n")
         f.write("format ascii 1.0\n")
