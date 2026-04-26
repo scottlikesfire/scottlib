@@ -134,6 +134,30 @@ def generate_tetrahedron():
     return verts, faces
 
 
+def generate_cube():
+    """Unit cube centered at the origin — 8 verts, 6 quad faces, all wound
+    so face normals point outward."""
+    verts = np.array([
+        [-1, -1, -1],  # 0
+        [ 1, -1, -1],  # 1
+        [ 1,  1, -1],  # 2
+        [-1,  1, -1],  # 3
+        [-1, -1,  1],  # 4
+        [ 1, -1,  1],  # 5
+        [ 1,  1,  1],  # 6
+        [-1,  1,  1],  # 7
+    ], dtype=float)
+    faces = [
+        [0, 3, 2, 1],  # bottom (-Z)
+        [4, 5, 6, 7],  # top    (+Z)
+        [0, 1, 5, 4],  # front  (-Y)
+        [2, 3, 7, 6],  # back   (+Y)
+        [0, 4, 7, 3],  # left   (-X)
+        [1, 2, 6, 5],  # right  (+X)
+    ]
+    return verts, faces
+
+
 def generate_octahedron():
     """Regular octahedron — 6 verts on the unit axes."""
     verts = np.array([
