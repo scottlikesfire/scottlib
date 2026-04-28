@@ -373,6 +373,246 @@ def generate_trefoil_knot(major_radius=1.0, minor_radius=0.2,
     return np.array(verts), faces
 
 
+# ----- Cones, cylinders, oblique variants -----
+
+def generate_cone(radius=1.0, height=2.0, num_segments=12):
+    """Right circular cone with apex on +z and base on the xy plane."""
+    verts = []
+    for i in range(num_segments):
+        theta = i * 2 * math.pi / num_segments
+        verts.append([radius * math.cos(theta), radius * math.sin(theta), 0.0])
+    base_center = len(verts)
+    verts.append([0.0, 0.0, 0.0])
+    apex = len(verts)
+    verts.append([0.0, 0.0, height])
+
+    faces = []
+    # Side triangles to apex
+    for i in range(num_segments):
+        ip = (i + 1) % num_segments
+        faces.append([i, ip, apex])
+    # Base cap (CCW seen from -z)
+    for i in range(num_segments):
+        ip = (i + 1) % num_segments
+        faces.append([base_center, ip, i])
+    return np.array(verts), faces
+
+
+def generate_oblique_cylinder(radius=1.0, height=2.0, num_segments=12,
+                              top_offset=(0.8, 0.0)):
+    """Cylinder with its top ring shifted in the xy plane — a parallelogram
+    of revolution. top_offset == (0, 0) reduces to a regular cylinder."""
+    ox, oy = top_offset
+    verts = []
+    # Bottom ring (z=0)
+    for i in range(num_segments):
+        theta = i * 2 * math.pi / num_segments
+        verts.append([radius * math.cos(theta), radius * math.sin(theta), 0.0])
+    # Top ring (z=height, shifted)
+    for i in range(num_segments):
+        theta = i * 2 * math.pi / num_segments
+        verts.append([radius * math.cos(theta) + ox,
+                      radius * math.sin(theta) + oy,
+                      height])
+    bottom_center = len(verts)
+    verts.append([0.0, 0.0, 0.0])
+    top_center = len(verts)
+    verts.append([ox, oy, height])
+
+    faces = []
+    # Side quads, wound for outward normals
+    for i in range(num_segments):
+        ip = (i + 1) % num_segments
+        a = i
+        b = ip
+        c = ip + num_segments
+        d = i + num_segments
+        faces.append([a, b, c, d])
+    # Bottom cap (CCW from -z)
+    for i in range(num_segments):
+        ip = (i + 1) % num_segments
+        faces.append([bottom_center, ip, i])
+    # Top cap (CCW from +z)
+    for i in range(num_segments):
+        ip = (i + 1) % num_segments
+        faces.append([top_center, i + num_segments, ip + num_segments])
+    return np.array(verts), faces
+
+
+# ----- Möbius strip -----
+
+def generate_mobius_strip(major_radius=1.0, half_width=0.5,
+                          num_u=32, num_v=4):
+    """Möbius strip. num_u segments around the loop, num_v across the width.
+
+    The strip closes back on itself with a 180° twist, so the seam face needs
+    to flip the v index: vertex (num_u, j) corresponds to vertex (0, num_v-1-j).
+
+    A Möbius strip is non-orientable — there is no consistent outward
+    direction, so backface culling would always kill half the strip from any
+    given camera angle. Each face is therefore emitted twice with reversed
+    winding so that exactly one of the two survives culling regardless of
+    which side faces the camera.
+    """
+    verts = []
+    for i in range(num_u):
+        u = i * 2 * math.pi / num_u
+        cu = math.cos(u)
+        su = math.sin(u)
+        cu2 = math.cos(u / 2)
+        su2 = math.sin(u / 2)
+        for j in range(num_v):
+            v = -1.0 + 2.0 * j / (num_v - 1)
+            r = major_radius + v * half_width * cu2
+            verts.append([r * cu, r * su, v * half_width * su2])
+
+    faces = []
+    for i in range(num_u):
+        ip = (i + 1) % num_u
+        seam = (ip == 0)
+        for j in range(num_v - 1):
+            jp = j + 1
+            a = i * num_v + j
+            b = i * num_v + jp
+            if seam:
+                # Closing the loop: the strip flips, so j on the next ring
+                # maps to (num_v - 1 - j).
+                c = ip * num_v + (num_v - 1 - jp)
+                d = ip * num_v + (num_v - 1 - j)
+            else:
+                c = ip * num_v + jp
+                d = ip * num_v + j
+            faces.append([a, b, c, d])
+            faces.append([a, d, c, b])  # reversed winding twin
+    return np.array(verts), faces
+
+
+# ----- Fractal solids -----
+
+# Positions in a 3³ grid that get removed at each Menger iteration:
+# the six face centers and the body center.
+_MENGER_REMOVED = frozenset({
+    (1, 1, 0), (1, 1, 2),  # ±z face centers
+    (1, 0, 1), (1, 2, 1),  # ±y face centers
+    (0, 1, 1), (2, 1, 1),  # ±x face centers
+    (1, 1, 1),              # body center
+})
+
+# Outward-wound faces for a unit cube whose corner indices match the
+# layout in generate_cube. Used by both Menger sponge and any other code
+# that needs to emit cube faces from a base index.
+_CUBE_QUAD_OFFSETS = [
+    [0, 3, 2, 1],  # bottom (-Z)
+    [4, 5, 6, 7],  # top    (+Z)
+    [0, 1, 5, 4],  # front  (-Y)
+    [2, 3, 7, 6],  # back   (+Y)
+    [0, 4, 7, 3],  # left   (-X)
+    [1, 2, 6, 5],  # right  (+X)
+]
+
+
+def _emit_cube(verts, faces, corner, side):
+    """Append an axis-aligned cube to the running mesh."""
+    base = len(verts)
+    x0, y0, z0 = corner
+    x1, y1, z1 = corner[0] + side, corner[1] + side, corner[2] + side
+    verts.extend([
+        [x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0],
+        [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1],
+    ])
+    for offsets in _CUBE_QUAD_OFFSETS:
+        faces.append([base + o for o in offsets])
+
+
+def generate_menger_sponge(iterations=1, size=2.0):
+    """Menger sponge fractal centered at the origin.
+
+    iterations=0 → a single cube. Each iteration replaces every cube with
+    20 sub-cubes (the 3³ grid minus the 6 face centers and the body center).
+    iterations=1 yields 20 cubes (160v / 120f); iterations=2 yields 400
+    cubes which is heavy for TUI rendering.
+    """
+    cubes = [(np.array([-size / 2, -size / 2, -size / 2]), float(size))]
+    for _ in range(iterations):
+        new_cubes = []
+        for corner, s in cubes:
+            child = s / 3.0
+            for ix in range(3):
+                for iy in range(3):
+                    for iz in range(3):
+                        if (ix, iy, iz) in _MENGER_REMOVED:
+                            continue
+                        child_corner = corner + np.array(
+                            [ix * child, iy * child, iz * child])
+                        new_cubes.append((child_corner, child))
+        cubes = new_cubes
+
+    verts = []
+    faces = []
+    for corner, s in cubes:
+        _emit_cube(verts, faces, corner, s)
+    return np.array(verts), faces
+
+
+def _subdivide_tetrahedron(tet):
+    """Returns 4 corner sub-tetrahedra (each as a list of 4 vertex coords)."""
+    v0, v1, v2, v3 = tet
+    m01 = (v0 + v1) / 2
+    m02 = (v0 + v2) / 2
+    m03 = (v0 + v3) / 2
+    m12 = (v1 + v2) / 2
+    m13 = (v1 + v3) / 2
+    m23 = (v2 + v3) / 2
+    return [
+        [v0, m01, m02, m03],
+        [v1, m01, m12, m13],
+        [v2, m02, m12, m23],
+        [v3, m03, m13, m23],
+    ]
+
+
+def generate_sierpinski_tetrahedron(iterations=2, size=1.0):
+    """Sierpinski tetrahedron (Tetrix / Menger pyramid). Each iteration
+    replaces every tetrahedron with 4 corner sub-tetrahedra. iterations=2
+    yields 16 tets (64v / 64f); iterations=3 yields 64 tets."""
+    initial = [
+        np.array([1.0, 1.0, 1.0]) * size,
+        np.array([1.0, -1.0, -1.0]) * size,
+        np.array([-1.0, 1.0, -1.0]) * size,
+        np.array([-1.0, -1.0, 1.0]) * size,
+    ]
+    tets = [initial]
+    for _ in range(iterations):
+        new_tets = []
+        for tet in tets:
+            new_tets.extend(_subdivide_tetrahedron(tet))
+        tets = new_tets
+
+    verts = []
+    faces = []
+    # Each sub-tetrahedron's vertex ordering is different from the parent's,
+    # so the hard-coded face winding from generate_tetrahedron isn't always
+    # outward. For each sub-tet, compute its centroid and flip any face
+    # whose normal points the wrong way.
+    raw_face_pattern = [
+        [0, 1, 2], [0, 3, 1], [0, 2, 3], [1, 3, 2],
+    ]
+    for tet in tets:
+        tet_arr = np.asarray(tet)
+        tet_centroid = tet_arr.mean(axis=0)
+        base = len(verts)
+        verts.extend(tet)
+        for pattern in raw_face_pattern:
+            a, b, c = tet_arr[pattern[0]], tet_arr[pattern[1]], tet_arr[pattern[2]]
+            normal = np.cross(b - a, c - a)
+            face_centroid = (a + b + c) / 3.0
+            if np.dot(normal, face_centroid - tet_centroid) >= 0:
+                faces.append([base + pattern[i] for i in range(3)])
+            else:
+                faces.append([base + pattern[2 - i] for i in range(3)])
+    return np.array(verts), faces
+
+
 def generate_stellated_octahedron():
     """Stella octangula — compound of two interpenetrating tetrahedra."""
     verts = np.array([
